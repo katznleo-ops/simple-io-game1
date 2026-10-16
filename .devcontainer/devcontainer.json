@@ -1,0 +1,4 @@
+{
+  "name": "Game Dev Environment",
+  "postCreateCommand": "chmod +x setup.sh && ./setup.sh"
+}
