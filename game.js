@@ -8,7 +8,27 @@ const BOT_COUNT = 16;
 const INITIAL_MASS = 100;
 const MIN_BOOST_MASS = 35;
 const BASE_SPEED = 3.4;
-const BOOST_MULTIPLIER = 1.75; // 75% speed boost when accelerating
+const BOOST_SPEED = 5.8; // Uniform boost speed for all sizes
+
+// --- Boost Particle Trail ---
+const boostParticles = [];
+
+function spawnBoostParticle(entity, moveAngle) {
+  const trailAngle = moveAngle + Math.PI + (Math.random() - 0.5) * 0.45;
+  const spawnDist = entity.radius * 0.88;
+  const pSpeed = Math.random() * 2.2 + 1.2;
+
+  boostParticles.push({
+    x: entity.x + Math.cos(trailAngle) * spawnDist,
+    y: entity.y + Math.sin(trailAngle) * spawnDist,
+    vx: Math.cos(trailAngle) * pSpeed,
+    vy: Math.sin(trailAngle) * pSpeed,
+    radius: Math.random() * 3 + 2.5,
+    color: entity.color,
+    alpha: 0.85,
+    life: 20
+  });
+}
 
 const PELLET_PALETTE = [
   '#f43f5e', '#ec4899', '#d946ef', '#a855f7',
@@ -311,14 +331,15 @@ function updateBots() {
     angleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
     bot.heading += angleDiff * 0.12;
 
-    // Calculate effective speed (silent boost without visual tell)
+    // Calculate effective speed (uniform boost speed for all sizes)
     let effectiveSpeed = bot.speed;
     if (bot.isBoosting) {
-      effectiveSpeed *= BOOST_MULTIPLIER;
+      effectiveSpeed = BOOST_SPEED;
       const massCost = 0.22 + bot.mass * 0.0015;
       bot.mass -= massCost;
       bot.radius = massToRadius(bot.mass);
       bot.speed = massToSpeed(bot.mass);
+      spawnBoostParticle(bot, bot.heading);
     }
 
     // Move bot
@@ -452,14 +473,16 @@ function gameLoop() {
     const dx = mouse.x - screenCenterX;
     const dy = mouse.y - screenCenterY;
     const dist = Math.hypot(dx, dy);
+    const moveAngle = Math.atan2(dy, dx);
 
-    // Speed up and burn mass when boosting (completely silent, no visual ring/particles)
+    // Speed up to uniform BOOST_SPEED and burn mass when boosting
     if (player.isBoosting) {
-      currentSpeed *= BOOST_MULTIPLIER;
+      currentSpeed = BOOST_SPEED;
       const massBurn = 0.25 + player.mass * 0.0018;
       player.mass -= massBurn;
       player.radius = massToRadius(player.mass);
       player.speed = massToSpeed(player.mass);
+      spawnBoostParticle(player, moveAngle);
     }
 
     if (dist > 8) {
@@ -565,6 +588,30 @@ function gameLoop() {
   const viewRight = camX + halfVisibleWidth;
   const viewTop = camY - halfVisibleHeight;
   const viewBottom = camY + halfVisibleHeight;
+
+  // Draw boost particle trail
+  for (let i = boostParticles.length - 1; i >= 0; i--) {
+    const p = boostParticles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.alpha -= 1 / p.life;
+    p.radius *= 0.96;
+
+    if (p.alpha <= 0 || p.radius <= 0.4) {
+      boostParticles.splice(i, 1);
+      continue;
+    }
+
+    ctx.save();
+    ctx.globalAlpha = p.alpha;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
 
   // Draw food pellets (all with white bordering)
   for (let i = 0; i < foodPellets.length; i++) {
